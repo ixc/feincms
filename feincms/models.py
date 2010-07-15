@@ -503,7 +503,7 @@ class Base(models.Model):
             }
 
         new_type = type(
-            model.__name__,
+            "%s_%s" % (model.__name__, cls.__name__),
             (model, feincms_content_base,),
             attrs)
         cls._feincms_content_types.append(new_type)
