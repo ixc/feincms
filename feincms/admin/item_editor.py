@@ -204,7 +204,8 @@ class ItemEditor(admin.ModelAdmin):
         content_types = []
         for content_type in self.model._feincms_content_types:
             content_name = content_type._meta.verbose_name
-            content_types.append((content_name, content_type.__name__.lower()))
+            content_id_name = content_type.__name__.lower().split('_')[0]
+            content_types.append((content_name, content_id_name))
 
         context = {}
 
@@ -417,7 +418,8 @@ class ItemEditor(admin.ModelAdmin):
         content_types = []
         for content_type in self.model._feincms_content_types:
             content_name = content_type._meta.verbose_name
-            content_types.append((content_name, content_type.__name__.lower()))
+            content_id_name = content_type.__name__.lower().split('_')[0]
+            content_types.append((content_name, content_id_name))
 
         context = {}
 
