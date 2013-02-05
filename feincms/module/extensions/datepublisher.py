@@ -31,6 +31,16 @@ def format_date(d, if_none=''):
 def latest_children(self):
     return self.get_children().order_by('-publication_date')
 
+
+def smart_datetime(*args, **kwargs):
+    from django.conf import settings
+    if settings.USE_TZ:
+        #return an aware datetime
+        if not 'tzinfo' in kwargs:
+            kwargs['tzinfo'] = timezone.get_default_timezone()
+        return datetime(*args, **kwargs).astimezone(timezone.get_default_timezone())
+    return datetime(*args, **kwargs)
+
 # ------------------------------------------------------------------------
 def granular_now(n=None):
     """
@@ -42,7 +52,7 @@ def granular_now(n=None):
     """
     if n is None:
         n = timezone.now()
-    return datetime(n.year, n.month, n.day, n.hour, (n.minute // 5) * 5)
+    return smart_datetime(n.year, n.month, n.day, n.hour, (n.minute // 5) * 5)
 
 # ------------------------------------------------------------------------
 def register(cls, admin_cls):
