@@ -194,7 +194,7 @@ class ItemEditor(ExtensionModelAdmin):
 
         return extra_context
 
-    def add_view(self, request, **kwargs):
+    def add_view(self, request, form_url="", extra_context=None):
         context = {}
 
         # insert dummy object as 'original' so template code can grab defaults
@@ -209,9 +209,8 @@ class ItemEditor(ExtensionModelAdmin):
             context['original'].template_key = request.POST['template_key']
 
         context.update(self.get_extra_context(request))
-        context.update(kwargs.get('extra_context', {}))
-        kwargs['extra_context'] = context
-        return super(ItemEditor, self).add_view(request, **kwargs)
+        context.update(extra_context or {})
+        return super(ItemEditor, self).add_view(request, form_url, context)
 
     def change_view(self, request, object_id, **kwargs):
         # Recognize frontend editing requests
