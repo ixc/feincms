@@ -2,11 +2,10 @@
 # coding=utf-8
 # ------------------------------------------------------------------------
 
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 import re
 
-from django import forms
 from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.contrib.sites.models import Site
 from django.db.models.loading import get_model
@@ -16,7 +15,6 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 
 from feincms import ensure_completely_loaded
-from feincms.utils import shorten_string
 
 from mptt.forms import MPTTAdminForm
 
@@ -33,18 +31,19 @@ class RedirectToWidget(ForeignKeyRawIdWidget):
             model = get_model(matches['app_label'], matches['module_name'])
             try:
                 instance = model._default_manager.get(pk=int(matches['pk']))
-                return u'&nbsp;<strong>%s (%s)</strong>' % (instance,
-                        instance.get_absolute_url())
+                return '&nbsp;<strong>%s (%s)</strong>' % (
+                    instance, instance.get_absolute_url())
 
             except model.DoesNotExist:
                 pass
 
-        return u''
+        return ''
 
 
 # ------------------------------------------------------------------------
 class PageAdminForm(MPTTAdminForm):
-    never_copy_fields = ('title', 'slug', 'parent', 'active', 'override_url',
+    never_copy_fields = (
+        'title', 'slug', 'parent', 'active', 'override_url',
         'translation_of', '_content_title', '_page_title')
 
     @property
@@ -64,6 +63,7 @@ class PageAdminForm(MPTTAdminForm):
                 try:
                     page = self.page_manager.get(
                         pk=kwargs['initial']['parent'])
+
                     data = model_to_dict(page)
 
                     for field in self.page_manager.exclude_from_copy:
@@ -76,6 +76,8 @@ class PageAdminForm(MPTTAdminForm):
                             del data[field]
 
                     data.update(kwargs['initial'])
+                    if page.template.child_template:
+                        data['template_key'] = page.template.child_template
                     kwargs['initial'] = data
                 except self.page_model.DoesNotExist:
                     pass
@@ -92,11 +94,13 @@ class PageAdminForm(MPTTAdminForm):
                         'template_key': original.template_key,
                         'active': original.active,
                         'in_navigation': original.in_navigation,
-                        }
+                    }
 
                     if original.parent:
                         try:
-                            data['parent'] = original.parent.get_translation(kwargs['initial']['language']).id
+                            data['parent'] = original.parent.get_translation(
+                                kwargs['initial']['language']
+                            ).id
                         except self.page_model.DoesNotExist:
                             # ignore this -- the translation does not exist
                             pass
@@ -117,17 +121,25 @@ class PageAdminForm(MPTTAdminForm):
                 self.page_model._meta.get_field('parent').rel,
                 modeladmin.admin_site)
 
-        if 'instance' in kwargs:
+        if 'template_key' in self.fields:
             choices = []
-            for key, template in kwargs['instance'].TEMPLATE_CHOICES:
-                template = kwargs['instance']._feincms_templates[key]
+            for key, template_name in self.page_model.TEMPLATE_CHOICES:
+                template = self.page_model._feincms_templates[key]
+                pages_for_template = self.page_model._default_manager.filter(
+                    template_key=key)
+                pk = kwargs['instance'].pk if 'instance' in kwargs else None
+                other_pages_for_template = pages_for_template.exclude(pk=pk)
+                if template.singleton and other_pages_for_template.exists():
+                    continue  # don't allow selection of singleton if in use
                 if template.preview_image:
-                    choices.append((template.key,
-                        mark_safe(u'<img src="%s" alt="%s" /> %s' % (
-                              template.preview_image,
-                              template.key,
-                              template.title,
-                              ))))
+                    choices.append((
+                        template.key,
+                        mark_safe('<img src="%s" alt="%s" /> %s' % (
+                            template.preview_image,
+                            template.key,
+                            template.title,
+                        ))
+                    ))
                 else:
                     choices.append((template.key, template.title))
 
@@ -168,8 +180,10 @@ class PageAdminForm(MPTTAdminForm):
             return cleaned_data
 
         if cleaned_data['override_url']:
-            if active_pages.filter(_cached_url=cleaned_data['override_url']).count():
-                self._errors['override_url'] = ErrorList([_('This URL is already taken by an active page.')])
+            if active_pages.filter(
+                    _cached_url=cleaned_data['override_url']).count():
+                self._errors['override_url'] = ErrorList([
+                    _('This URL is already taken by an active page.')])
                 del cleaned_data['override_url']
 
             return cleaned_data
@@ -187,8 +201,14 @@ class PageAdminForm(MPTTAdminForm):
             new_url = '/%s/' % cleaned_data['slug']
 
         if active_pages.filter(_cached_url=new_url).count():
-            self._errors['active'] = ErrorList([_('This URL is already taken by another active page.')])
+            self._errors['active'] = ErrorList([
+                _('This URL is already taken by another active page.')])
             del cleaned_data['active']
+
+        if parent and parent.template.enforce_leaf:
+            self._errors['parent'] = ErrorList(
+                [_('This page does not allow attachment of child pages')])
+            del cleaned_data['parent']
 
         return cleaned_data
 

@@ -97,12 +97,6 @@ Optional Packages
   <http://tidy.sourceforge.net>`_ while editing content. Install pytidylib and
   add ``FEINCMS_TIDY_HTML = True`` to your settings.py.
 
-* Alternately, `lxml <http://pypi.python.org/pypi/lxml>`_ can be installed to perform
-  silent HTML cleanup to remove non-standard markup while editing content.
-  Install lxml and add ``cleanse=True`` when you register ``RichTextContent``
-  or ``SectionContent``::
-
-    RichTextContentType = Page.create_content_type(RichTextContent, cleanse=True)
 
 Repository branches
 -------------------
@@ -121,3 +115,12 @@ rewinding policies are described below.
 * ``pu`` or feature branches are used for short-lived projects. These
   branches aren't guaranteed to stay around and are not meant to be
   deployed into production environments.
+
+
+Travis CI
+=========
+
+.. image:: https://travis-ci.org/feincms/feincms.png?branch=next
+   :target: https://travis-ci.org/feincms/feincms
+.. image:: https://travis-ci.org/feincms/feincms.png?branch=master
+   :target: https://travis-ci.org/feincms/feincms

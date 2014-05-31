@@ -1,10 +1,14 @@
+from __future__ import absolute_import, unicode_literals
+
 from django.http import Http404
 from django.template import Template
 from django.utils.datastructures import SortedDict
+from django.utils.decorators import method_decorator
 from django.views import generic
 from django.views.generic.base import TemplateResponseMixin
 
 from feincms import settings
+from feincms.views.decorators import standalone
 
 
 class ContentModelMixin(object):
@@ -18,13 +22,6 @@ class ContentModelMixin(object):
 
     #: Collection of response processors
     response_processors = None
-
-    def setup_request(self, request):
-        import warnings
-        warnings.warn(
-            '%s.setup_request does nothing anymore, and will be removed in'
-            ' FeinCMS v1.8',
-            DeprecationWarning, stacklevel=2)
 
     @classmethod
     def register_request_processor(cls, fn, key=None):
@@ -46,6 +43,22 @@ class ContentModelMixin(object):
         if cls.response_processors is None:
             cls.response_processors = SortedDict()
         cls.response_processors[fn if key is None else key] = fn
+
+    # TODO Implement admin_urlname templatetag protocol
+    @property
+    def app_label(self):
+        """
+        Implement the admin_urlname templatetag protocol, so one can easily
+        generate an admin link using ::
+
+            {% url page|admin_urlname:'change' page.id %}
+        """
+        return self._meta.app_label
+
+    @property
+    def module_name(self):
+        "See app_label"
+        return self.__class__.__name__.lower()
 
 
 class ContentObjectMixin(TemplateResponseMixin):
@@ -129,7 +142,7 @@ class ContentObjectMixin(TemplateResponseMixin):
         if not getattr(self.object, 'request_processors', None):
             return
 
-        for fn in reversed(self.object.request_processors.values()):
+        for fn in reversed(list(self.object.request_processors.values())):
             r = fn(self.object, self.request)
             if r:
                 return r
@@ -167,7 +180,7 @@ class ContentObjectMixin(TemplateResponseMixin):
                     successful = r
                 elif r:
                     return r
-            except Http404, e:
+            except Http404 as e:
                 http404 = e
 
         if not successful:
@@ -181,12 +194,11 @@ class ContentObjectMixin(TemplateResponseMixin):
                     and extra_context.get('extra_path', '/') != '/'
                     # XXX Already inside application content.  I'm not sure
                     # whether this fix is really correct...
-                    and not extra_context.get('app_config')
-                    ):
-                raise Http404('Not found (extra_path %r on %r)' % (
+                    and not extra_context.get('app_config')):
+                raise Http404(str('Not found (extra_path %r on %r)') % (
                     extra_context.get('extra_path', '/'),
                     self.object,
-                    ))
+                ))
 
     def finalize_content_types(self, response):
         """
@@ -211,3 +223,9 @@ class ContentView(ContentObjectMixin, generic.DetailView):
         self.kwargs = kwargs
         self.object = self.get_object()
         return self.handler(request, *args, **kwargs)
+
+
+class StandaloneView(generic.View):
+    @method_decorator(standalone)
+    def dispatch(self, request, *args, **kwargs):
+        return super(StandaloneView, self).dispatch(request, *args, **kwargs)

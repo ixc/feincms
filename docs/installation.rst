@@ -23,7 +23,7 @@ which you can download using the Git_ version control system::
     $ git clone git://github.com/feincms/feincms.git
 
 Feincms, some content types or cleaning modules are dependent on the following apps, which are installed when using pip:
-lxml_, feedparser_, PIL_, django-mptt_ and BeautifulSoup_.
+feedparser_, Pillow_ and django-mptt_.
 
 However, django-tagging_ is not installed because the blog module that uses it is merely a proof of
 concept. If you are looking to implement a blog, check out elephantblog_.
@@ -37,10 +37,8 @@ TinyMCE_ works out of the box and is recommended.
 .. _Subversion: http://subversion.tigris.org/
 .. _django-mptt: http://github.com/django-mptt/django-mptt/
 .. _django-tagging: http://code.google.com/p/django-tagging/
-.. _lxml: http://codespeak.net/lxml/
 .. _feedparser: http://www.feedparser.org/
-.. _PIL: http://www.pythonware.com/products/pil/
-.. _BeautifulSoup: http://pypi.python.org/pypi/BeautifulSoup/3.2.1
+.. _Pillow: https://pypi.python.org/pypi/Pillow/
 .. _elephantblog: http://github.com/feincms/feincms-elephantblog
 .. _TinyMCE: http://www.tinymce.com/
 .. _CKEditor: http://ckeditor.com/
@@ -49,9 +47,13 @@ TinyMCE_ works out of the box and is recommended.
 Configuration
 =============
 
-There isn't much left to do apart from adding a few entries to ``INSTALLED_APPS``,
-most commonly you'll want to add ``feincms``, ``mptt``, ``feincms.module.page`` and
-``feincms.module.medialibrary``.
+There isn't much left to do apart from adding a few entries to ``INSTALLED_APPS``, most commonly you'll want to add::
+
+    feincms,
+    mptt,
+    feincms.module.page,
+    feincms.module.medialibrary
+
 The customized administration interface needs some media and javascript
 libraries which you have to make available to the browser. FeinCMS uses Django's
 ``django.contrib.staticfiles`` application for this purpose, the media files will
@@ -69,4 +71,4 @@ pages and this is the most advanced module of FeinCMS too. Please
 proceed to :ref:`page` to find out how you can get the page module
 up and running.
 
-.. _settings: https://docs.djangoproject.com/en/dev/topics/i18n/translation/#how-django-discovers-language-preference
+.. _settings: https://docs.djangoproject.com/en/dev/ref/settings/#languages

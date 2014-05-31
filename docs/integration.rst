@@ -5,9 +5,7 @@ Integrating 3rd party apps into your site
 =========================================
 
 With FeinCMS come a set of standard views which you might want to check
-out before starting to write your own. Included is a standard view for
-pages, and a set of generic view drop-in replacements which know about
-the CMS.
+out before starting to write your own.
 
 
 Default page handler
@@ -152,7 +150,7 @@ Django's standard functionality::
        class Meta:
            ordering = ['-id']
 
-       def __unicode__(self):
+       def __str__(self):
            return self.title
 
        @app_models.permalink
@@ -200,6 +198,7 @@ are returned directly to the client under the following circumstances:
   returns ``True``)
 * The response was explicitly marked as ``standalone`` by the
   :func:`feincms.views.decorators.standalone` view decorator
+  (made easier by mixing-in :class:`feincms.module.mixins.StandaloneView`)
 * The mimetype of the response was not ``text/plain`` or ``text/html``
 
 Otherwise, the content of the response is unpacked and inserted into the
@@ -247,7 +246,7 @@ of any template rendering calls:
 
 ``urls.py``::
 
-    from django.conf.urls.defaults import patterns, include, url
+    from django.conf.urls import patterns, include, url
 
     urlpatterns = patterns('news.views',
         url(r'^$', 'entry_list', name='entry_list'),
@@ -314,6 +313,17 @@ Storing the URL in a context variable is supported too::
 
     {% load applicationcontent_tags %}
     {% app_reverse "mymodel_detail" "myapp.urls" arg1 arg2 as url %}
+
+Inside the app (in this case, inside the views defined in ``myapp.urls``),
+you can also pass the current request instance instead of the URLconf
+name.
+
+If an application has been added several times to the same page tree,
+``app_reverse`` tries to find the best match. The logic is contained inside
+``ApplicationContent.closest_match``, and can be overridden by subclassing
+the application content type. The default implementation only takes the current
+language into account, which is mostly helpful when you're using the
+translations page extension.
 
 
 Additional customization possibilities

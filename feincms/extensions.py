@@ -2,26 +2,19 @@
 Base types for extensions refactor
 """
 
-import re
-import warnings
+from __future__ import absolute_import, unicode_literals
+
 from functools import wraps
+import inspect
 
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured
+from django.utils import six
 
 from feincms.utils import get_object
 
 
 class ExtensionsMixin(object):
-    @property
-    def _feincms_extensions(self):
-        warnings.warn(
-            'Start using _extensions instead of _feincms_extensions'
-            ' today!',
-            DeprecationWarning, stacklevel=2)
-
-        return set(self._extensions)
-
     @classmethod
     def register_extensions(cls, *extensions):
         """
@@ -38,51 +31,23 @@ class ExtensionsMixin(object):
             cls._extensions = []
             cls._extensions_seen = []
 
-        here = cls.__module__.split('.')[:-1]
-        search_paths = [
-            '.'.join(here + ['extensions']),
-            '.'.join(here[:-1] + ['extensions']),
-            'feincms.module.extensions',
-            ]
-
         for ext in extensions:
             if ext in cls._extensions:
                 continue
 
             extension = None
 
-            if isinstance(ext, basestring):
-                paths = [ext, '%s.register' % ext]
-                for path in search_paths:
-                    paths.extend([
-                        '%s.%s.register' % (path, ext),
-                        '%s.%s' % (path, ext),
-                        ])
+            if inspect.isclass(ext) and issubclass(ext, Extension):
+                extension = ext
 
-                for idx, path in enumerate(paths):
-                    try:
-                        extension = get_object(path)
-
-                        if idx >= 2:
-                            warnings.warn(
-                                'Using short names for extensions has been'
-                                ' deprecated and will be removed in'
-                                ' FeinCMS v1.8. Please provide the full'
-                                ' python path to the extension'
-                                ' %s instead (%s).' % (
-                                    ext,
-                                    re.sub(r'\.register$', '', path),
-                                    ),
-                                DeprecationWarning, stacklevel=2)
-
-                        break
-                    except (AttributeError, ImportError, ValueError):
-                        pass
-
-            if not extension:
-                raise ImproperlyConfigured(
-                    '%s is not a valid extension for %s' % (
-                        ext, cls.__name__))
+            elif isinstance(ext, six.string_types):
+                try:
+                    extension = get_object(ext)
+                except (AttributeError, ImportError, ValueError):
+                    if not extension:
+                        raise ImproperlyConfigured(
+                            '%s is not a valid extension for %s' % (
+                                ext, cls.__name__))
 
             if hasattr(extension, 'Extension'):
                 extension = extension.Extension
@@ -105,7 +70,8 @@ class ExtensionsMixin(object):
             if hasattr(extension, 'handle_model'):
                 cls._extensions.append(extension(cls))
             else:
-                cls._extensions.append(LegacyExtension(cls, extension=extension))
+                raise ImproperlyConfigured(
+                    '%r is an invalid extension.' % extension)
 
 
 class Extension(object):
@@ -131,64 +97,6 @@ def _ensure_list(cls, attribute):
         return
     value = getattr(cls, attribute, ()) or ()
     setattr(cls, attribute, list(value))
-
-
-class LegacyExtension(Extension):
-    """
-    Wrapper for legacy extensions
-    """
-
-    #: Legacy extension function
-    extension = None
-
-    def handle_model(self):
-        self.fieldsets = []
-        self.filter_horizontal = []
-        self.filter_vertical = []
-        self.list_display = []
-        self.list_filter = []
-        self.raw_id_fields = []
-        self.search_fields = []
-
-        self.extension_options = []
-        self.known_keys = self.__dict__.keys()
-
-        self.extension(self.model, self)
-
-    def handle_modeladmin(self, modeladmin):
-        if self.fieldsets:
-            _ensure_list(modeladmin, 'fieldsets')
-            modeladmin.fieldsets.extend(self.fieldsets)
-        if self.filter_horizontal:
-            _ensure_list(modeladmin, 'filter_horizontal')
-            modeladmin.filter_horizontal.extend(self.filter_horizontal)
-        if self.filter_vertical:
-            _ensure_list(modeladmin, 'filter_vertical')
-            modeladmin.filter_vertical.extend(self.filter_vertical)
-        if self.list_display:
-            _ensure_list(modeladmin, 'list_display')
-            modeladmin.list_display.extend(self.list_display)
-        if self.list_filter:
-            _ensure_list(modeladmin, 'list_filter')
-            modeladmin.list_filter.extend(self.list_filter)
-        if self.raw_id_fields:
-            _ensure_list(modeladmin, 'raw_id_fields')
-            modeladmin.raw_id_fields.extend(self.raw_id_fields)
-        if self.search_fields:
-            _ensure_list(modeladmin, 'search_fields')
-            modeladmin.search_fields.extend(self.search_fields)
-
-        if self.extension_options:
-            for f in self.extension_options:
-                modeladmin.add_extension_options(*f)
-
-        for key, value in self.__dict__.items():
-            if key not in self.known_keys:
-                setattr(modeladmin.__class__, key, value)
-
-    def add_extension_options(self, *f):
-        if f:
-            self.extension_options.append(f)
 
 
 class ExtensionModelAdmin(admin.ModelAdmin):
@@ -217,6 +125,11 @@ class ExtensionModelAdmin(admin.ModelAdmin):
                 # Fall back to first fieldset if second does not exist
                 # XXX This is really messy.
                 self.fieldsets[0][1]['fields'].extend(f)
+
+    def extend_list(self, attribute, iterable):
+        extended = list(getattr(self, attribute, ()))
+        extended.extend(iterable)
+        setattr(self, attribute, extended)
 
 
 def prefetch_modeladmin_get_queryset(modeladmin, *lookups):

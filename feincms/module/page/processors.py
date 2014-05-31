@@ -1,3 +1,5 @@
+from __future__ import absolute_import, print_function, unicode_literals
+
 import re
 import sys
 
@@ -26,15 +28,18 @@ def extra_context_request_processor(page, request):
         # XXX This variable name isn't accurate anymore.
         'in_appcontent_subpage': False,
         'extra_path': '/',
-        })
+    })
 
     url = page.get_absolute_url()
     if request.path != url:
         request._feincms_extra_context.update({
             'in_appcontent_subpage': True,
-            'extra_path': re.sub('^' + re.escape(url.rstrip('/')), '',
-                request.path),
-            })
+            'extra_path': re.sub(
+                '^' + re.escape(url.rstrip('/')),
+                '',
+                request.path,
+            ),
+        })
 
 
 def frontendediting_request_processor(page, request):
@@ -42,7 +47,7 @@ def frontendediting_request_processor(page, request):
     Sets the frontend editing state in the cookie depending on the
     ``frontend_editing`` GET parameter and the user's permissions.
     """
-    if not 'frontend_editing' in request.GET:
+    if 'frontend_editing' not in request.GET:
         return
 
     response = HttpResponseRedirect(request.path)
@@ -53,9 +58,9 @@ def frontendediting_request_processor(page, request):
             enable_fe = False
 
         if enable_fe:
-            response.set_cookie('frontend_editing', enable_fe)
+            response.set_cookie(str('frontend_editing'), enable_fe)
         else:
-            response.delete_cookie('frontend_editing')
+            response.delete_cookie(str('frontend_editing'))
 
     # Redirect to cleanup URLs
     return response
@@ -107,7 +112,8 @@ def etag_request_processor(page, request):
     # the net effect is that we will be getting a DummyResponse from
     # the handler if processing is to continue and a non-DummyResponse
     # (should be a "304 not modified") if the etag matches.
-    rsp = condition(etag_func=etagger, last_modified_func=lastmodifier)(dummy_response_handler)(request, page)
+    rsp = condition(etag_func=etagger, last_modified_func=lastmodifier)(
+        dummy_response_handler)(request, page)
 
     # If dummy then don't do anything, if a real response, return and
     # thus shortcut the request processing.
@@ -128,8 +134,9 @@ def etag_response_processor(page, request, response):
 
 def debug_sql_queries_response_processor(verbose=False, file=sys.stderr):
     """
-    Attaches a handler which prints the query count (and optionally all individual queries
-    which have been executed) on the console. Does nothing if ``DEBUG = False``.
+    Attaches a handler which prints the query count (and optionally all
+    individual queries which have been executed) on the console. Does nothing
+    if ``DEBUG = False``.
 
     Example::
 
@@ -147,22 +154,24 @@ def debug_sql_queries_response_processor(verbose=False, file=sys.stderr):
         print_sql = lambda x: x
         try:
             import sqlparse
-            print_sql = lambda x: sqlparse.format(x, reindent=True, keyword_case='upper')
+            print_sql = lambda x: sqlparse.format(
+                x, reindent=True, keyword_case='upper')
         except:
             pass
 
         if verbose:
-            print >> file, "--------------------------------------------------------------"
+            print("-" * 60, file=file)
         time = 0.0
         i = 0
         for q in connection.queries:
             i += 1
             if verbose:
-                print >> file, "%d : [%s]\n%s\n" % ( i, q['time'], print_sql(q['sql']))
+                print("%d : [%s]\n%s\n" % (
+                    i, q['time'], print_sql(q['sql'])), file=file)
             time += float(q['time'])
 
-        print >> file, "--------------------------------------------------------------"
-        print >> file, "Total: %d queries, %.3f ms" % (i, time)
-        print >> file, "--------------------------------------------------------------"
+        print("-" * 60, file=file)
+        print("Total: %d queries, %.3f ms" % (i, time), file=file)
+        print("-" * 60, file=file)
 
     return processor
