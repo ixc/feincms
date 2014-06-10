@@ -423,6 +423,11 @@
                 var in_database = item.find(".delete-field").length;
                 if(in_database==0){ // remove on client-side only
                     var id = item.find(".item-content > div").attr('id');
+                    var count = $('#id_'+id.substring(0, id.lastIndexOf("-"))+'-TOTAL_FORMS').val();
+
+                    if (count > 0) {
+                       $('#id_'+id.substring(0, id.lastIndexOf("-"))+'-TOTAL_FORMS').val(count-1);
+                    }
 
                     // poorify all contents
                     items = item.parents('.order-machine').find('.order-item');
@@ -438,6 +443,22 @@
                     items.each(function() {
                       richify_poor($(this));
                     })
+
+                    if (count > 0) {
+                        for(var i=parseInt(id.split('-')[id.split('-').length-1])+1; i <= count; i++){
+                            $("*[id*='" + id.substring(0, id.lastIndexOf("-"))+"-" + i + "']").each(function() {
+                                $(this).attr('id', $(this).attr('id').replace(id.substring(0, id.lastIndexOf("-"))+'-'+i, id.substring(0, id.lastIndexOf("-"))+'-'+(i-1)));
+                            })
+                            $("*[for*='" + id.substring(0, id.lastIndexOf("-"))+"-" + i + "']").each(function() {
+                                $(this).attr('for', $(this).attr('for').replace(id.substring(0, id.lastIndexOf("-"))+'-'+i, id.substring(0, id.lastIndexOf("-"))+'-'+(i-1)));
+                            })
+                            $("*[name*='" + id.substring(0, id.lastIndexOf("-"))+"-" + i + "']").each(function() {
+                                $(this).attr('name', $(this).attr('name').replace(id.substring(0, id.lastIndexOf("-"))+'-'+i, id.substring(0, id.lastIndexOf("-"))+'-'+(i-1)));
+                            })
+                            $('#'+id.substring(0, id.lastIndexOf("-"))+'-'+i).attr('id', id.substring(0, id.lastIndexOf("-"))+'-'+(i - 1))
+                        }
+                    }
+
                 }
                 else{ // saved on server, don't remove form
                     set_item_field_value(item,"delete-field","checked");
