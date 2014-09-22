@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 
-VERSION = (1, 9, 3)
+VERSION = (1, 10, 0)
 __version__ = '.'.join(map(str, VERSION))
 
 
@@ -44,6 +44,15 @@ def ensure_completely_loaded(force=False):
     if COMPLETELY_LOADED and not force:
         return True
 
+    try:
+        from django.apps import apps
+    except ImportError:
+        pass
+    else:
+        # Django 1.7 and up
+        if not apps.ready:
+            return
+
     # Ensure meta information concerning related fields is up-to-date.
     # Upon accessing the related fields information from Model._meta,
     # the related fields are cached and never refreshed again (because
@@ -77,7 +86,10 @@ def ensure_completely_loaded(force=False):
     # a model validation error (Django 1.4 doesn't exhibit this problem).
     # See Issue #323 on github.
     if hasattr(loading, 'cache'):
-        loading.cache._get_models_cache.clear()
+        try:
+            loading.cache.get_models.cache_clear()  # Django 1.7+
+        except AttributeError:
+            loading.cache._get_models_cache.clear()  # Django 1.6-
 
     if hasattr(loading.app_cache_ready, '__call__'):
         if loading.app_cache_ready():

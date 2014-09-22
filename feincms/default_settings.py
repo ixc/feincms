@@ -10,8 +10,6 @@ All of these can be overridden by specifying them in the standard
 
 from __future__ import absolute_import, unicode_literals
 
-from os.path import join
-
 from django.conf import settings
 
 # ------------------------------------------------------------------------
@@ -46,11 +44,11 @@ FEINCMS_MEDIALIBRARY_THUMBNAIL = getattr(
 FEINCMS_RICHTEXT_INIT_TEMPLATE = getattr(
     settings,
     'FEINCMS_RICHTEXT_INIT_TEMPLATE',
-    'admin/content/richtext/init_tinymce.html')
+    'admin/content/richtext/init_tinymce4.html')
 FEINCMS_RICHTEXT_INIT_CONTEXT = getattr(
     settings,
     'FEINCMS_RICHTEXT_INIT_CONTEXT', {
-        'TINYMCE_JS_URL': join(settings.MEDIA_URL, 'js/tiny_mce/tiny_mce.js'),
+        'TINYMCE_JS_URL': '//tinymce.cachefly.net/4.1/tinymce.min.js',
         'TINYMCE_DOMAIN': None,
         'TINYMCE_CONTENT_CSS_URL': None,
         'TINYMCE_LINK_LIST_URL': None
@@ -105,6 +103,12 @@ FEINCMS_DEFAULT_PAGE_MODEL = getattr(
 
 # ------------------------------------------------------------------------
 # Various settings
+
+#: Run the weak replacement for a real database migration solution?
+FEINCMS_CHECK_DATABASE_SCHEMA = getattr(
+    settings,
+    'FEINCMS_CHECK_DATABASE_SCHEMA',
+    False)
 
 # ------------------------------------------------------------------------
 #: Allow random gunk after a valid page?

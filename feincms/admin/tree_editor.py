@@ -24,6 +24,7 @@ from mptt.exceptions import InvalidMove
 from mptt.forms import MPTTAdminForm
 
 from feincms import settings
+from feincms._internal import get_permission_codename
 from feincms.extensions import ExtensionModelAdmin
 
 
@@ -246,11 +247,11 @@ class TreeEditor(ExtensionModelAdmin):
             'admin/feincms/tree_editor.html',
         ]
         self.object_change_permission =\
-            opts.app_label + '.' + opts.get_change_permission()
+            opts.app_label + '.' + get_permission_codename('change', opts)
         self.object_add_permission =\
-            opts.app_label + '.' + opts.get_add_permission()
+            opts.app_label + '.' + get_permission_codename('add', opts)
         self.object_delete_permission =\
-            opts.app_label + '.' + opts.get_delete_permission()
+            opts.app_label + '.' + get_permission_codename('delete', opts)
 
     def changeable(self, item):
         return getattr(item, 'feincms_changeable', True)
@@ -423,7 +424,9 @@ class TreeEditor(ExtensionModelAdmin):
         self._refresh_changelist_caches()
 
         extra_context = extra_context or {}
-        queryset = self.queryset(request)
+        queryset = (
+            self.get_queryset(request) if hasattr(self, 'get_queryset')
+            else self.queryset(request))
         extra_context['tree_structure'] = mark_safe(
             json.dumps(_build_tree_structure(queryset)))
 
@@ -477,7 +480,9 @@ class TreeEditor(ExtensionModelAdmin):
         else:
             tree_manager = self.model._tree_manager
 
-        queryset = self.queryset(request)
+        queryset = (
+            self.get_queryset(request) if hasattr(self, 'get_queryset')
+            else self.queryset(request))
         cut_item = queryset.get(pk=request.POST.get('cut_item'))
         pasted_on = queryset.get(pk=request.POST.get('pasted_on'))
         position = request.POST.get('position')
@@ -526,16 +531,22 @@ class TreeEditor(ExtensionModelAdmin):
         # If this is True, the confirmation page has been displayed
         if request.POST.get('post'):
             n = 0
-            for obj in queryset:
-                if self.has_delete_permission(request, obj):
-                    obj.delete()
-                    n += 1
-                    obj_display = force_text(obj)
-                    self.log_deletion(request, obj, obj_display)
-                else:
-                    logger.warning(
-                        "Denied delete request by \"%s\" for object #%s",
-                        request.user, obj.id)
+            # TODO: The disable_mptt_updates / rebuild is a work around
+            # for what seems to be a mptt problem when deleting items
+            # in a loop. Revisit this, there should be a better solution.
+            with queryset.model.objects.disable_mptt_updates():
+                for obj in queryset:
+                    if self.has_delete_permission(request, obj):
+                        obj.delete()
+                        n += 1
+                        obj_display = force_text(obj)
+                        self.log_deletion(request, obj, obj_display)
+                    else:
+                        logger.warning(
+                            "Denied delete request by \"%s\" for object #%s",
+                            request.user, obj.id)
+            if n > 0:
+                queryset.model.objects.rebuild()
             self.message_user(
                 request,
                 _("Successfully deleted %(count)d items.") % {"count": n})

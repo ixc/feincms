@@ -82,23 +82,23 @@ in the rendered result.
    outlined apply for all other CMS base types.
 
 
-The complete code required to implement and include a custom textile content
+The complete code required to implement and include a custom markdown content
 type is shown here::
 
+    from markdown2 import markdown
     from feincms.module.page.models import Page
-    from django.contrib.markup.templatetags.markup import textile
     from django.db import models
 
-    class TextilePageContent(models.Model):
+    class MarkdownPageContent(models.Model):
         content = models.TextField()
 
         class Meta:
             abstract = True
 
         def render(self, **kwargs):
-            return textile(self.content)
+            return markdown(self.content)
 
-    Page.create_content_type(TextilePageContent)
+    Page.create_content_type(MarkdownPageContent)
 
 
 There are three field names you should not use because they are added
@@ -403,32 +403,59 @@ Rich text
 .. module:: feincms.content.richtext.models
 .. class:: RichTextContent()
 
-Rich text editor widget, stripped down to the essentials; no media support, only
-a few styles activated. The necessary javascript files are not included,
-you need to put them in the right place on your own.
+Rich text editor widget, stripped down to the essentials; no media support,
+only a few styles activated.
 
-By default, ``RichTextContent`` expects a TinyMCE activation script at
-``<MEDIA_URL>js/tiny_mce/tiny_mce.js``. This can be customized by overriding
-``FEINCMS_RICHTEXT_INIT_TEMPLATE`` and ``FEINCMS_RICHTEXT_INIT_CONTEXT`` in
-your ``settings.py`` file.
+By default, ``RichTextContent`` uses the CDN-served version of TinyMCE 4.1.
+This can be customized by overriding ``FEINCMS_RICHTEXT_INIT_TEMPLATE`` and
+``FEINCMS_RICHTEXT_INIT_CONTEXT`` in your ``settings.py`` file.
 
 If you only want to provide a different path to the TinyMCE javascript file,
 you can do this as follows::
 
     FEINCMS_RICHTEXT_INIT_CONTEXT = {
         'TINYMCE_JS_URL': '/your_custom_path/tiny_mce.js',
-        }
-
-If you pass cleanse=True to the create_content_type invocation for your
-RichTextContent types, the HTML code will be cleansed right before saving
-to the database everytime the content is modified.
+    }
 
 Additional arguments for :func:`~feincms.models.Base.create_content_type`:
 
 * ``cleanse``:
 
-  Whether the HTML code should be cleansed of all tags and attributes
-  which are not explicitly whitelisted. The default is ``False``.
+  Either the dotted python path to a function or a function itself which
+  accepts a HTML string and returns a cleansed version of it. A library which
+  is often used for this purpose is
+  `feincms-cleanse <https://pypi.python.org/pypi/feincms-cleanse>`_.
+
+
+CKEditor
+~~~~~~~~
+
+Add the following settings to activate `CKEditor <http://ckeditor.com/>`_::
+
+    FEINCMS_RICHTEXT_INIT_TEMPLATE = 'admin/content/richtext/init_ckeditor.html'
+    FEINCMS_RICHTEXT_INIT_CONTEXT = {
+        # See http://cdn.ckeditor.com/ for the latest version:
+        'CKEDITOR_JS_URL': '//cdn.ckeditor.com/4.4.2/standard/ckeditor.js',
+    }
+
+
+Other rich text libraries
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Other rich text widgets can be wired up for the RichTextContent.
+You would have to write two functions: One which is called when
+rich text editing functionality is added ("richify"), and another
+one which is called when functionality is removed ("poorify").
+The second is necessary because rich text editors do not like
+being dragged; when dragging a rich text content type, it is first
+poorified and then richified again as soon as the content type has
+been dropped into its final position.
+
+To perform those operations
+  * Add a function adding the new rich text editor to
+    ``contentblock_init_handlers`` and to ``contentblock_move_handlers.richify``
+  * Add a function removing the rich text editor to
+    ``contentblock_move_handlers.poorify``
 
 
 RSS feeds

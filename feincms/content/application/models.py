@@ -210,8 +210,12 @@ class ApplicationContent(models.Model):
                         self.custom_fields.update(
                             get_fields(self, *args, **kwargs))
 
+                    params = self.instance.parameters
                     for k, v in self.custom_fields.items():
+                        v.initial = params.get(k)
                         self.fields[k] = v
+                        if k in params:
+                            self.fields[k].initial = params[k]
 
             def save(self, commit=True, *args, **kwargs):
                 # Django ModelForms return the model instance from save. We'll

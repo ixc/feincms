@@ -39,27 +39,27 @@ else which I haven't thought of yet). It provides helper functions,
 which provide ordered lists of page content blocks. That's all.
 
 
-Adding your own content types is extremely easy. Do you like textile
+Adding your own content types is extremely easy. Do you like markdown
 that much, that you'd rather die than using a rich text editor?
 Then add the following code to your project, and you can go on using the
 CMS without being forced to use whatever the developers deemed best:
 
 ::
 
+    from markdown2 import markdown
     from feincms.module.page.models import Page
-    from django.contrib.markup.templatetags.markup import textile
     from django.db import models
 
-    class TextilePageContent(models.Model):
+    class MarkdownPageContent(models.Model):
         content = models.TextField()
 
         class Meta:
             abstract = True
 
         def render(self, **kwargs):
-            return textile(self.content)
+            return markdown(self.content)
 
-    Page.create_content_type(TextilePageContent)
+    Page.create_content_type(MarkdownPageContent)
 
 
 That's it. Not even ten code lines for your own page content type.
@@ -76,6 +76,13 @@ Visit these sites
 * Read the documentation: http://feincms-django-cms.readthedocs.org/
 * See the Google Groups page at http://groups.google.com/group/django-feincms
 * FeinCMS on github: https://github.com/feincms/feincms/
+
+Try out FeinCMS in a Box
+------------------------
+
+`FeinCMS in a Box <https://github.com/matthiask/feincms-in-a-box>`_ is a
+prepackaged installation of FeinCMS with a few additional modules and a setup
+script. Try it out!
 
 IRC
 ---

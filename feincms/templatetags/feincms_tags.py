@@ -10,6 +10,7 @@ from django import template
 from django.conf import settings
 from django.template.loader import render_to_string
 
+from feincms._internal import get_permission_codename
 from feincms.utils import get_singleton, get_singleton_url
 
 
@@ -83,23 +84,33 @@ def show_content_type_selection_widget(context, region):
     """
     {% show_content_type_selection_widget region %}
     """
-    user = context['request'].user
+    if 'request' in context:
+        user = context['request'].user
+    elif user in context:
+        user = context['user']
+    else:
+        user = None
+
     grouped = {}
     ungrouped = []
-    for ct in region._content_types:
-        # Skip cts that we shouldn't be adding anyway
-        perm = ct._meta.app_label + "." + ct._meta.get_add_permission()
-        if not user.has_perm(perm):
-            continue
 
-        ct_info = (ct.__name__.lower(), ct._meta.verbose_name)
-        if hasattr(ct, 'optgroup'):
-            if ct.optgroup in grouped:
-                grouped[ct.optgroup].append(ct_info)
+    if user:
+        for ct in region._content_types:
+            # Skip cts that we shouldn't be adding anyway
+            opts = ct._meta
+            perm = opts.app_label + "." + get_permission_codename('add', opts)
+            if not user.has_perm(perm):
+                continue
+
+            ct_info = (ct.__name__.lower(), ct._meta.verbose_name)
+            if hasattr(ct, 'optgroup'):
+                if ct.optgroup in grouped:
+                    grouped[ct.optgroup].append(ct_info)
+                else:
+                    grouped[ct.optgroup] = [ct_info]
             else:
-                grouped[ct.optgroup] = [ct_info]
-        else:
-            ungrouped.append(ct_info)
+                ungrouped.append(ct_info)
+
     return {'grouped': grouped, 'ungrouped': ungrouped}
 
 

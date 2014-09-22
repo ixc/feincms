@@ -88,6 +88,7 @@ class PagesTestCase(TestCase):
             'initial-publication_date_0': '2009-01-01',
             'initial-publication_date_1': '00:00:00',
             'language': 'en',
+            'navigation_group': 'default',
             'site': self.site_1.id,
 
             'rawcontent_set-TOTAL_FORMS': 0,
@@ -128,6 +129,7 @@ class PagesTestCase(TestCase):
             'site': self.site_1,
             'in_navigation': False,
             'active': False,
+            'navigation_group': 'default',
         }
         defaults.update(kwargs)
         return Page.objects.create(
@@ -349,6 +351,7 @@ class PagesTestCase(TestCase):
             'initial-publication_date_0': '2009-01-01',
             'initial-publication_date_1': '00:00:00',
             'language': 'en',
+            'navigation_group': 'default',
             'site': self.site_1.id,
 
             'rawcontent_set-TOTAL_FORMS': 1,
@@ -489,7 +492,7 @@ class PagesTestCase(TestCase):
 
         self.assertTrue('somefile.jpg' in page.content.main[2].render())
         self.assertTrue(re.search(
-            '<a .*href="somefile\.jpg">.*thetitle.*</a>',
+            '<a .*href="/media/somefile\.jpg">.*thetitle.*</a>',
             page.content.main[3].render(),
             re.MULTILINE + re.DOTALL) is not None)
 
@@ -510,7 +513,7 @@ class PagesTestCase(TestCase):
         (field.upload_to, field.storage, field.generate_filename) = old
 
         mediafile = MediaFile.objects.get(pk=1)
-        self.assertEqual(mediafile.file.url, 'somefile.jpg')
+        self.assertEqual(mediafile.file.url, '/media/somefile.jpg')
 
     def test_11_translations(self):
         self.create_default_page_set()
@@ -521,6 +524,10 @@ class PagesTestCase(TestCase):
         page1 = Page.objects.get(pk=1)
         page2 = Page.objects.get(pk=2)
 
+        page1.active = True
+        page1.save()
+
+        page2.active = True
         page2.language = 'de'
         page2.save()
 
@@ -1416,6 +1423,18 @@ class PagesTestCase(TestCase):
         self.assertContains(
             self.client.get('/admin/page/page/%d/' % page.id),
             'exclusive_subpages')
+        self.assertContains(
+            self.client.get('/admin/page/page/%d/' % page.id),
+            'custom_field'
+        )
+
+        # Check if admin_fields get populated correctly
+        app_ct = page.applicationcontent_set.all()[0]
+        app_ct.parameters =\
+            '{"custom_field":"val42", "exclusive_subpages": false}'
+        app_ct.save()
+        r = self.client.get('/admin/page/page/%d/' % page.id)
+        self.assertContains(r, 'val42')
 
     def test_26_page_form_initial(self):
         self.create_default_page_set()
@@ -1709,3 +1728,48 @@ class PagesTestCase(TestCase):
 
         page1.parent = page3
         self.assertRaises(InvalidMove, page1.save)
+
+    def test_38_invalid_template(self):
+        page = Page()
+        page.template_key = 'test'
+        self.assertEqual(page.template.key, 'base')
+
+    def test_39_navigationgroups(self):
+        self.create_default_page_set()
+
+        page1, page2 = list(Page.objects.order_by('id'))
+
+        page1.active = True
+        page1.in_navigation = True
+        page1.save()
+
+        page2.active = True
+        page2.in_navigation = True
+        page2.navigation_group = 'footer'
+        page2.save()
+
+        t = template.Template(
+            '''
+{% load feincms_page_tags %}
+{% feincms_nav feincms_page level=1 depth=10 group='default' as nav %}
+{% for p in nav %}{{ p.get_absolute_url }},{% endfor %}
+            '''
+        )
+        str = t.render(template.Context({
+            'feincms_page': page1,
+        }))
+
+        self.assertEqual(str.strip(), '/test-page/,')
+
+        t = template.Template(
+            '''
+{% load feincms_page_tags %}
+{% feincms_nav feincms_page level=1 depth=10 group='footer' as nav %}
+{% for p in nav %}{{ p.get_absolute_url }},{% endfor %}
+            '''
+        )
+        str = t.render(template.Context({
+            'feincms_page': page1,
+        }))
+
+        self.assertEqual(str.strip(), '/test-page/test-child-page/,')

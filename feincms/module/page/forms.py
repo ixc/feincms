@@ -15,6 +15,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 
 from feincms import ensure_completely_loaded
+from feincms._internal import get_model_name
 
 from mptt.forms import MPTTAdminForm
 
@@ -23,12 +24,12 @@ class RedirectToWidget(ForeignKeyRawIdWidget):
     def label_for_value(self, value):
         match = re.match(
             # XXX this regex would be available as .models.REDIRECT_TO_RE
-            r'^(?P<app_label>\w+).(?P<module_name>\w+):(?P<pk>\d+)$',
+            r'^(?P<app_label>\w+).(?P<model_name>\w+):(?P<pk>\d+)$',
             value)
 
         if match:
             matches = match.groupdict()
-            model = get_model(matches['app_label'], matches['module_name'])
+            model = get_model(matches['app_label'], matches['model_name'])
             try:
                 instance = model._default_manager.get(pk=int(matches['pk']))
                 return '&nbsp;<strong>%s (%s)</strong>' % (
@@ -127,7 +128,7 @@ class PageAdminForm(MPTTAdminForm):
                 template = self.page_model._feincms_templates[key]
                 pages_for_template = self.page_model._default_manager.filter(
                     template_key=key)
-                pk = kwargs['instance'].pk if 'instance' in kwargs else None
+                pk = kwargs['instance'].pk if kwargs.get('instance') else None
                 other_pages_for_template = pages_for_template.exclude(pk=pk)
                 if template.singleton and other_pages_for_template.exists():
                     continue  # don't allow selection of singleton if in use
@@ -169,7 +170,7 @@ class PageAdminForm(MPTTAdminForm):
         if redirect_to and re.match(r'^\d+$', redirect_to):
             opts = self.page_model._meta
             cleaned_data['redirect_to'] = '%s.%s:%s' % (
-                opts.app_label, opts.module_name, redirect_to)
+                opts.app_label, get_model_name(opts), redirect_to)
 
         if not cleaned_data['active']:
             # If the current item is inactive, we do not need to conduct

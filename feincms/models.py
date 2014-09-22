@@ -12,11 +12,11 @@ import sys
 import operator
 import warnings
 
+import django
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connections, models
 from django.db.models import Q
-from django.db.models.fields import FieldDoesNotExist
 from django.db.models.loading import get_model
 from django.forms.widgets import Media
 from django.template.loader import render_to_string
@@ -25,6 +25,7 @@ from django.utils.encoding import force_text, python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 
 from feincms import ensure_completely_loaded
+from feincms._internal import get_model_name
 from feincms.extensions import ExtensionsMixin
 from feincms.utils import copy_model_instance
 
@@ -194,7 +195,7 @@ class ContentProxy(object):
 
         return _c
 
-    def _popuplate_content_type_caches(self, types):
+    def _populate_content_type_caches(self, types):
         """
         Populate internal caches for all content types passed
         """
@@ -224,13 +225,20 @@ class ContentProxy(object):
                 else:
                     self._cache['cts'][cls] = []
 
+        # share this content proxy object between all content items
+        # so that each can use obj.parent.content to determine its
+        # relationship to its siblings, etc.
+        for cls, objects in self._cache['cts'].items():
+            for obj in objects:
+                setattr(obj.parent, '_content_proxy', self)
+
     def _fetch_regions(self):
         """
         Fetches all content types and group content types into regions
         """
 
         if 'regions' not in self._cache:
-            self._popuplate_content_type_caches(
+            self._populate_content_type_caches(
                 self.item._feincms_content_types)
             contents = {}
             for cls, content_list in self._cache['cts'].items():
@@ -260,7 +268,7 @@ class ContentProxy(object):
         content_list = []
         if not hasattr(type_or_tuple, '__iter__'):
             type_or_tuple = (type_or_tuple,)
-        self._popuplate_content_type_caches(type_or_tuple)
+        self._populate_content_type_caches(type_or_tuple)
 
         for type, contents in self._cache['cts'].items():
             if any(issubclass(type, t) for t in type_or_tuple):
@@ -383,13 +391,17 @@ def create_base_model(inherit_from=models.Model):
                 instances[template.key] = template
 
             try:
-                field = cls._meta.get_field_by_name('template_key')[0]
-            except (FieldDoesNotExist, IndexError):
+                field = next(iter(
+                    field for field in cls._meta.local_fields
+                    if field.name == 'template_key'))
+            except (StopIteration,):
                 cls.add_to_class(
                     'template_key',
                     models.CharField(_('template'), max_length=255, choices=())
                 )
-                field = cls._meta.get_field_by_name('template_key')[0]
+                field = next(iter(
+                    field for field in cls._meta.local_fields
+                    if field.name == 'template_key'))
 
                 def _template(self):
                     ensure_completely_loaded()
@@ -400,7 +412,7 @@ def create_base_model(inherit_from=models.Model):
                         # return first template as a fallback if the template
                         # has changed in-between
                         return self._feincms_templates[
-                            self._feincms_templates.keys()[0]]
+                            list(self._feincms_templates.keys())[0]]
 
                 cls.template = property(_template)
 
@@ -510,7 +522,7 @@ def create_base_model(inherit_from=models.Model):
 
                 return '%s-%s-%s-%s-%s' % (
                     cls._meta.app_label,
-                    cls._meta.module_name,
+                    get_model_name(cls._meta),
                     self.__class__.__name__.lower(),
                     self.parent_id,
                     self.id,
@@ -649,24 +661,29 @@ def create_base_model(inherit_from=models.Model):
                 # everything ok
                 pass
 
-            # Next name clash test. Happens when the same content type is
-            # created for two Base subclasses living in the same Django
-            # application (github issues #73 and #150)
-            try:
-                other_model = get_model(cls._meta.app_label, class_name)
-                if other_model is None:
-                    # Django 1.6 and earlier
-                    raise LookupError
-            except LookupError:
-                pass
-            else:
-                warnings.warn(
-                    'It seems that the content type %s exists twice in %s.'
-                    ' Use the class_name argument to create_content_type to'
-                    ' avoid this error.' % (
-                        model.__name__,
-                        cls._meta.app_label),
-                    RuntimeWarning)
+            if django.VERSION < (1, 7):
+                # Next name clash test. Happens when the same content type is
+                # created for two Base subclasses living in the same Django
+                # application (github issues #73 and #150)
+                #
+                # FIXME This code does not work with Django 1.7, because
+                # get_model depends on the app cache which is not ready at
+                # this time yet.
+                try:
+                    other_model = get_model(cls._meta.app_label, class_name)
+                    if other_model is None:
+                        # Django 1.6 and earlier
+                        raise LookupError
+                except LookupError:
+                    pass
+                else:
+                    warnings.warn(
+                        'It seems that the content type %s exists twice in %s.'
+                        ' Use the class_name argument to create_content_type'
+                        ' to avoid this error.' % (
+                            model.__name__,
+                            cls._meta.app_label),
+                        RuntimeWarning)
 
             if not model._meta.abstract:
                 raise ImproperlyConfigured(
@@ -702,8 +719,6 @@ def create_base_model(inherit_from=models.Model):
                 attrs,
             )
             cls._feincms_content_types.append(new_type)
-            # For consistency's sake, also install the new type in the module
-            setattr(sys.modules[cls.__module__], class_name, new_type)
 
             if hasattr(getattr(new_type, 'process', None), '__call__'):
                 cls._feincms_content_types_with_process.append(new_type)
