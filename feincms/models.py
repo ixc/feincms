@@ -7,6 +7,7 @@ the feincms\_ namespace.
 
 from __future__ import absolute_import, unicode_literals
 
+from collections import OrderedDict
 from functools import reduce
 import sys
 import operator
@@ -16,11 +17,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connections, models
 from django.db.models import Q
-from django.db.models.fields import FieldDoesNotExist
-from django.db.models.loading import get_model
 from django.forms.widgets import Media
-from django.template.loader import render_to_string
-from django.utils.datastructures import SortedDict
 from django.utils.encoding import force_text, python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 
@@ -194,7 +191,7 @@ class ContentProxy(object):
 
         return _c
 
-    def _popuplate_content_type_caches(self, types):
+    def _populate_content_type_caches(self, types):
         """
         Populate internal caches for all content types passed
         """
@@ -224,13 +221,20 @@ class ContentProxy(object):
                 else:
                     self._cache['cts'][cls] = []
 
+        # share this content proxy object between all content items
+        # so that each can use obj.parent.content to determine its
+        # relationship to its siblings, etc.
+        for cls, objects in self._cache['cts'].items():
+            for obj in objects:
+                setattr(obj.parent, '_content_proxy', self)
+
     def _fetch_regions(self):
         """
         Fetches all content types and group content types into regions
         """
 
         if 'regions' not in self._cache:
-            self._popuplate_content_type_caches(
+            self._populate_content_type_caches(
                 self.item._feincms_content_types)
             contents = {}
             for cls, content_list in self._cache['cts'].items():
@@ -260,7 +264,7 @@ class ContentProxy(object):
         content_list = []
         if not hasattr(type_or_tuple, '__iter__'):
             type_or_tuple = (type_or_tuple,)
-        self._popuplate_content_type_caches(type_or_tuple)
+        self._populate_content_type_caches(type_or_tuple)
 
         for type, contents in self._cache['cts'].items():
             if any(issubclass(type, t) for t in type_or_tuple):
@@ -371,7 +375,7 @@ def create_base_model(inherit_from=models.Model):
             """
 
             if not hasattr(cls, '_feincms_templates'):
-                cls._feincms_templates = SortedDict()
+                cls._feincms_templates = OrderedDict()
                 cls.TEMPLATES_CHOICES = []
 
             instances = cls._feincms_templates
@@ -383,13 +387,21 @@ def create_base_model(inherit_from=models.Model):
                 instances[template.key] = template
 
             try:
-                field = cls._meta.get_field_by_name('template_key')[0]
-            except (FieldDoesNotExist, IndexError):
+                field = next(iter(
+                    field for field in cls._meta.local_fields
+                    if field.name == 'template_key'))
+            except (StopIteration,):
                 cls.add_to_class(
                     'template_key',
-                    models.CharField(_('template'), max_length=255, choices=())
+                    models.CharField(_('template'), max_length=255, choices=(
+                        # Dummy choice to trick Django. Cannot be empty,
+                        # otherwise admin.E023 happens.
+                        ('__dummy', '__dummy'),
+                    ))
                 )
-                field = cls._meta.get_field_by_name('template_key')[0]
+                field = next(iter(
+                    field for field in cls._meta.local_fields
+                    if field.name == 'template_key'))
 
                 def _template(self):
                     ensure_completely_loaded()
@@ -400,15 +412,22 @@ def create_base_model(inherit_from=models.Model):
                         # return first template as a fallback if the template
                         # has changed in-between
                         return self._feincms_templates[
-                            self._feincms_templates.keys()[0]]
+                            list(self._feincms_templates.keys())[0]]
 
                 cls.template = property(_template)
 
-            cls.TEMPLATE_CHOICES = field._choices = [
+            cls.TEMPLATE_CHOICES = [
                 (template_.key, template_.title,)
                 for template_ in cls._feincms_templates.values()
             ]
-            field.default = field.choices[0][0]
+            try:
+                # noqa https://github.com/django/django/commit/80e3444eca045799cc40e50c92609e852a299d38
+                # Django 1.9 uses this code
+                field.choices = cls.TEMPLATE_CHOICES
+            except AttributeError:
+                # Older versions of Django use that.
+                field._choices = cls.TEMPLATE_CHOICES
+            field.default = cls.TEMPLATE_CHOICES[0][0]
 
             # Build a set of all regions used anywhere
             cls._feincms_all_regions = set()
@@ -483,39 +502,6 @@ def create_base_model(inherit_from=models.Model):
 
                 raise NotImplementedError
 
-            def fe_render(self, **kwargs):
-                """
-                Frontend Editing enabled renderer
-                """
-
-                if 'request' in kwargs:
-                    request = kwargs['request']
-
-                    if (hasattr(request, 'COOKIES')
-                            and request.COOKIES.get('frontend_editing')):
-                        return render_to_string('admin/feincms/fe_box.html', {
-                            'content': self.render(**kwargs),
-                            'identifier': self.fe_identifier(),
-                        })
-
-                return self.render(**kwargs)
-
-            def fe_identifier(self):
-                """
-                Returns an identifier which is understood by the frontend
-                editing javascript code. (It is used to find the URL which
-                should be used to load the form for every given block of
-                content.)
-                """
-
-                return '%s-%s-%s-%s-%s' % (
-                    cls._meta.app_label,
-                    cls._meta.module_name,
-                    self.__class__.__name__.lower(),
-                    self.parent_id,
-                    self.id,
-                )
-
             def get_queryset(cls, filter_args):
                 return cls.objects.select_related().filter(filter_args)
 
@@ -529,11 +515,11 @@ def create_base_model(inherit_from=models.Model):
                 '__module__': cls.__module__,
                 '__str__': __str__,
                 'render': render,
-                'fe_render': fe_render,
-                'fe_identifier': fe_identifier,
                 'get_queryset': classmethod(get_queryset),
                 'Meta': Meta,
-                'parent': models.ForeignKey(cls, related_name='%(class)s_set'),
+                'parent': models.ForeignKey(
+                    cls, related_name='%(class)s_set',
+                    on_delete=models.CASCADE),
                 'region': models.CharField(max_length=255),
                 'ordering': models.IntegerField(_('ordering'), default=0),
             }
@@ -649,25 +635,6 @@ def create_base_model(inherit_from=models.Model):
                 # everything ok
                 pass
 
-            # Next name clash test. Happens when the same content type is
-            # created for two Base subclasses living in the same Django
-            # application (github issues #73 and #150)
-            try:
-                other_model = get_model(cls._meta.app_label, class_name)
-                if other_model is None:
-                    # Django 1.6 and earlier
-                    raise LookupError
-            except LookupError:
-                pass
-            else:
-                warnings.warn(
-                    'It seems that the content type %s exists twice in %s.'
-                    ' Use the class_name argument to create_content_type to'
-                    ' avoid this error.' % (
-                        model.__name__,
-                        cls._meta.app_label),
-                    RuntimeWarning)
-
             if not model._meta.abstract:
                 raise ImproperlyConfigured(
                     'Cannot create content type from'
@@ -702,8 +669,6 @@ def create_base_model(inherit_from=models.Model):
                 attrs,
             )
             cls._feincms_content_types.append(new_type)
-            # For consistency's sake, also install the new type in the module
-            setattr(sys.modules[cls.__module__], class_name, new_type)
 
             if hasattr(getattr(new_type, 'process', None), '__call__'):
                 cls._feincms_content_types_with_process.append(new_type)
@@ -775,8 +740,8 @@ def create_base_model(inherit_from=models.Model):
                 concrete_type = Page.content_type_for(VideoContent)
             """
 
-            if (not hasattr(cls, '_feincms_content_types')
-                    or not cls._feincms_content_types):
+            if (not hasattr(cls, '_feincms_content_types') or
+                    not cls._feincms_content_types):
                 return None
 
             for type in cls._feincms_content_types:
@@ -802,9 +767,7 @@ def create_base_model(inherit_from=models.Model):
 
             # Check whether any content types have been created for this base
             # class
-            if (
-                    not hasattr(cls, '_feincms_content_types')
-                    or not cls._feincms_content_types):
+            if not getattr(cls, '_feincms_content_types', None):
                 raise ImproperlyConfigured(
                     'You need to create at least one'
                     ' content type for the %s model.' % cls.__name__)
@@ -838,15 +801,18 @@ def create_base_model(inherit_from=models.Model):
         @classmethod
         def register_with_reversion(cls):
             try:
-                import reversion
+                from reversion.revisions import register
             except ImportError:
-                raise EnvironmentError("django-reversion is not installed")
+                try:
+                    from reversion import register
+                except ImportError:
+                    raise EnvironmentError("django-reversion is not installed")
 
             follow = []
             for content_type in cls._feincms_content_types:
                 follow.append('%s_set' % content_type.__name__.lower())
-                reversion.register(content_type)
-            reversion.register(cls, follow=follow)
+                register(content_type)
+            register(cls, follow=follow)
 
     return Base
 

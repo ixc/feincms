@@ -10,16 +10,19 @@
 
 from __future__ import absolute_import, unicode_literals
 
-from django import forms
+from django import forms, VERSION
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db.models.signals import pre_save
 from django.utils import six
 from django.utils.translation import ugettext_lazy as _
 
-from tagging import AlreadyRegistered
 from tagging.fields import TagField
 from tagging.models import Tag
 from tagging.utils import parse_tag_input
+try:
+    from tagging.registry import AlreadyRegistered
+except ImportError:
+    from tagging import AlreadyRegistered
 
 
 # ------------------------------------------------------------------------
@@ -33,6 +36,7 @@ def taglist_to_string(taglist):
 # ------------------------------------------------------------------------
 # The following is lifted from:
 # http://code.google.com/p/django-tagging/issues/detail?id=189
+
 
 """
 TagSelectField
@@ -52,6 +56,30 @@ class TagSelectFormField(forms.MultipleChoiceField):
         return taglist_to_string(list(value))
 
 
+if VERSION >= (1, 10):
+    class Tag_formatvalue_mixin(object):
+        def format_value(self, value):
+            value = parse_tag_input(value or '')
+            return super(Tag_formatvalue_mixin, self).format_value(value)
+else:
+    # _format_value is a private method previous to Django 1.10,
+    # do the job in render() instead to avoid fiddling with
+    # anybody's privates
+    class Tag_formatvalue_mixin(object):
+        def render(self, name, value, attrs=None, *args, **kwargs):
+            value = parse_tag_input(value or '')
+            return super(Tag_formatvalue_mixin, self).render(
+                name, value, attrs, *args, **kwargs)
+
+
+class fv_FilteredSelectMultiple(Tag_formatvalue_mixin, FilteredSelectMultiple):
+    pass
+
+
+class fv_SelectMultiple(Tag_formatvalue_mixin, forms.SelectMultiple):
+    pass
+
+
 class TagSelectField(TagField):
     def __init__(self, filter_horizontal=False, *args, **kwargs):
         super(TagSelectField, self).__init__(*args, **kwargs)
@@ -59,16 +87,11 @@ class TagSelectField(TagField):
 
     def formfield(self, **defaults):
         if self.filter_horizontal:
-            widget = FilteredSelectMultiple(
+            widget = fv_FilteredSelectMultiple(
                 self.verbose_name, is_stacked=False)
         else:
-            widget = forms.SelectMultiple()
+            widget = fv_SelectMultiple()
 
-        def _render(name, value, attrs=None, *args, **kwargs):
-            value = parse_tag_input(value)
-            return type(widget).render(
-                widget, name, value, attrs, *args, **kwargs)
-        widget.render = _render
         defaults['widget'] = widget
         choices = [(
             six.text_type(t),
@@ -77,7 +100,6 @@ class TagSelectField(TagField):
             choices=choices, required=not self.blank, **defaults)
 
 
-# ------------------------------------------------------------------------
 # ------------------------------------------------------------------------
 def pre_save_handler(sender, instance, **kwargs):
     """
@@ -109,7 +131,10 @@ def tag_model(cls, admin_cls=None, field_name='tags', sort_tags=False,
     auto_add_admin_field If True, attempts to add the tag field to the admin
                 class.
     """
-    from tagging import register as tagging_register
+    try:
+        from tagging.registry import register as tagging_register
+    except ImportError:
+        from tagging import register as tagging_register
 
     cls.add_to_class(field_name, (
         TagSelectField if select_field else TagField

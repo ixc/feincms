@@ -10,12 +10,7 @@ All of these can be overridden by specifying them in the standard
 
 from __future__ import absolute_import, unicode_literals
 
-from os.path import join
-
 from django.conf import settings
-
-# ------------------------------------------------------------------------
-# Settings for Generic Content
 
 # e.g. 'uploads' if you would prefer <media root>/uploads/imagecontent/test.jpg
 # to <media root>/imagecontent/test.jpg.
@@ -46,25 +41,16 @@ FEINCMS_MEDIALIBRARY_THUMBNAIL = getattr(
 FEINCMS_RICHTEXT_INIT_TEMPLATE = getattr(
     settings,
     'FEINCMS_RICHTEXT_INIT_TEMPLATE',
-    'admin/content/richtext/init_tinymce.html')
+    'admin/content/richtext/init_tinymce4.html')
 FEINCMS_RICHTEXT_INIT_CONTEXT = getattr(
     settings,
     'FEINCMS_RICHTEXT_INIT_CONTEXT', {
-        'TINYMCE_JS_URL': join(settings.MEDIA_URL, 'js/tiny_mce/tiny_mce.js'),
+        'TINYMCE_JS_URL': '//tinymce.cachefly.net/4.2/tinymce.min.js',
         'TINYMCE_DOMAIN': None,
         'TINYMCE_CONTENT_CSS_URL': None,
         'TINYMCE_LINK_LIST_URL': None
     }
 )
-
-# ------------------------------------------------------------------------
-# Admin media settings
-
-#: avoid jQuery conflicts -- scripts should use feincms.jQuery instead of $
-FEINCMS_JQUERY_NO_CONFLICT = getattr(
-    settings,
-    'FEINCMS_JQUERY_NO_CONFLICT',
-    False)
 
 # ------------------------------------------------------------------------
 # Settings for the page module
@@ -73,12 +59,6 @@ FEINCMS_JQUERY_NO_CONFLICT = getattr(
 FEINCMS_TREE_EDITOR_INCLUDE_ANCESTORS = getattr(
     settings,
     'FEINCMS_TREE_EDITOR_INCLUDE_ANCESTORS',
-    False)
-
-#: Show frontend-editing button?
-FEINCMS_FRONTEND_EDITING = getattr(
-    settings,
-    'FEINCMS_FRONTEND_EDITING',
     False)
 
 #: Enable checking of object level permissions. Note that if this option is
@@ -96,15 +76,12 @@ FEINCMS_USE_PAGE_ADMIN = getattr(
     'FEINCMS_USE_PAGE_ADMIN',
     True)
 
-#: app_label.model_name as per django.db.models.get_model.
+#: app_label.model_name as per apps.get_model.
 #: defaults to page.Page
 FEINCMS_DEFAULT_PAGE_MODEL = getattr(
     settings,
     'FEINCMS_DEFAULT_PAGE_MODEL',
     'page.Page')
-
-# ------------------------------------------------------------------------
-# Various settings
 
 # ------------------------------------------------------------------------
 #: Allow random gunk after a valid page?
@@ -123,33 +100,6 @@ FEINCMS_TRANSLATION_POLICY = getattr(
     settings,
     'FEINCMS_TRANSLATION_POLICY',
     'STANDARD')
-
-# ------------------------------------------------------------------------
-# Settings for HTML validation
-
-#: If True, HTML will be run through a tidy function before saving:
-FEINCMS_TIDY_HTML = getattr(
-    settings,
-    'FEINCMS_TIDY_HTML',
-    False)
-#: If True, displays form validation errors so the user can see how their
-#: HTML has been changed:
-FEINCMS_TIDY_SHOW_WARNINGS = getattr(
-    settings,
-    'FEINCMS_TIDY_SHOW_WARNINGS',
-    True)
-#: If True, users will be allowed to ignore HTML warnings (errors are always
-#: blocked):
-FEINCMS_TIDY_ALLOW_WARNINGS_OVERRIDE = getattr(
-    settings,
-    'FEINCMS_TIDY_ALLOW_WARNINGS_OVERRIDE',
-    True)
-#: Name of the tidy function - anything which takes ``(html)`` and returns
-#: ``(html, errors, warnings)`` can be used:
-FEINCMS_TIDY_FUNCTION = getattr(
-    settings,
-    'FEINCMS_TIDY_FUNCTION',
-    'feincms.utils.html.tidy.tidy_html')
 
 # ------------------------------------------------------------------------
 #: Makes the page handling mechanism try to find a cms page with that
@@ -181,6 +131,14 @@ FEINCMS_THUMBNAIL_DIR = getattr(
     '_thumbs/')
 
 # ------------------------------------------------------------------------
+#: feincms_thumbnail template filter library cache timeout. The default is to
+#: not cache anything for backwards compatibility.
+FEINCMS_THUMBNAIL_CACHE_TIMEOUT = getattr(
+    settings,
+    'FEINCMS_THUMBNAIL_CACHE_TIMEOUT',
+    0)
+
+# ------------------------------------------------------------------------
 #: Prevent changing template within admin for pages which have been
 #: allocated a Template with singleton=True -- template field will become
 #: read-only for singleton pages.
@@ -195,5 +153,14 @@ FEINCMS_SINGLETON_TEMPLATE_DELETION_ALLOWED = getattr(
     settings,
     'FEINCMS_SINGLETON_TEMPLATE_DELETION_ALLOWED',
     False)
+
+# ------------------------------------------------------------------------
+#: Filter languages available for front end users to this set. This allows
+#: to have languages not yet ready for prime time while being able to access
+#: those pages in the admin backend.
+FEINCMS_FRONTEND_LANGUAGES = getattr(
+    settings,
+    'FEINCMS_FRONTEND_LANGUAGES',
+    None)
 
 # ------------------------------------------------------------------------

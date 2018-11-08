@@ -11,16 +11,18 @@ from django.conf import settings as django_settings
 from django.contrib import admin
 from django.contrib import messages
 from django.contrib.auth.decorators import permission_required
-from django.contrib.sites.models import Site
+from django.contrib.sites.shortcuts import get_current_site
 from django.core.files.images import get_image_dimensions
-from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
-from django.shortcuts import render_to_response
-from django.template.context import RequestContext
+from django.shortcuts import render
 from django.template.defaultfilters import filesizeformat
 from django.utils.safestring import mark_safe
 from django.utils.translation import ungettext, ugettext_lazy as _
 from django.views.decorators.csrf import csrf_protect
+try:
+    from django.urls import reverse
+except ImportError:
+    from django.core.urlresolvers import reverse
 
 from feincms.extensions import ExtensionModelAdmin
 from feincms.translations import admin_translationinline, lookup_translations
@@ -74,11 +76,11 @@ def assign_category(modeladmin, request, queryset):
                 admin.ACTION_CHECKBOX_NAME),
         })
 
-    return render_to_response('admin/medialibrary/add_to_category.html', {
+    return render(request, 'admin/medialibrary/add_to_category.html', {
         'mediafiles': queryset,
         'category_form': form,
         'opts': modeladmin.model._meta,
-    }, context_instance=RequestContext(request))
+    })
 
 
 assign_category.short_description = _('Add selected media files to category')
@@ -88,7 +90,7 @@ assign_category.short_description = _('Add selected media files to category')
 def save_as_zipfile(modeladmin, request, queryset):
     from .zip import export_zipfile
 
-    site = Site.objects.get_current()
+    site = get_current_site(request)
     try:
         zip_name = export_zipfile(site, queryset)
         messages.info(request, _("ZIP file exported as %s") % zip_name)
@@ -121,20 +123,16 @@ class MediaFileAdmin(ExtensionModelAdmin):
     actions = [assign_category, save_as_zipfile]
 
     def get_urls(self):
-        from django.conf.urls import patterns, url
+        from django.conf.urls import url
 
-        urls = super(MediaFileAdmin, self).get_urls()
-        my_urls = patterns(
-            '',
+        return [
             url(
                 r'^mediafile-bulk-upload/$',
                 self.admin_site.admin_view(MediaFileAdmin.bulk_upload),
                 {},
                 name='mediafile_bulk_upload',
             ),
-        )
-
-        return my_urls + urls
+        ] + super(MediaFileAdmin, self).get_urls()
 
     def changelist_view(self, request, extra_context=None):
         if extra_context is None:
@@ -155,7 +153,6 @@ class MediaFileAdmin(ExtensionModelAdmin):
             )
         return ''
     admin_thumbnail.short_description = _('Preview')
-    admin_thumbnail.allow_tags = True
 
     def formatted_file_size(self, obj):
         return filesizeformat(obj.file_size)
@@ -180,12 +177,11 @@ class MediaFileAdmin(ExtensionModelAdmin):
                 d = get_image_dimensions(obj.file.file)
                 if d:
                     t += " %d&times;%d" % (d[0], d[1])
-            except (IOError, ValueError) as e:
+            except (IOError, TypeError, ValueError) as e:
                 t += " (%s)" % e
-        return t
+        return mark_safe(t)
     file_type.admin_order_field = 'type'
     file_type.short_description = _('file type')
-    file_type.allow_tags = True
 
     def file_info(self, obj):
         """
@@ -195,7 +191,7 @@ class MediaFileAdmin(ExtensionModelAdmin):
         the file name later on, this can be used to access the file name from
         JS, like for example a TinyMCE connector shim.
         """
-        return (
+        return mark_safe((
             '<input type="hidden" class="medialibrary_file_path"'
             ' name="_media_path_%d" value="%s" id="_refkey_%d" />'
             ' %s <br />%s, %s'
@@ -206,10 +202,9 @@ class MediaFileAdmin(ExtensionModelAdmin):
             shorten_string(os.path.basename(obj.file.name), max_length=40),
             self.file_type(obj),
             self.formatted_file_size(obj),
-        )
+        ))
     file_info.admin_order_field = 'file'
     file_info.short_description = _('file info')
-    file_info.allow_tags = True
 
     @staticmethod
     @csrf_protect
@@ -230,8 +225,8 @@ class MediaFileAdmin(ExtensionModelAdmin):
         return HttpResponseRedirect(
             reverse('admin:medialibrary_mediafile_changelist'))
 
-    def queryset(self, request):
-        return super(MediaFileAdmin, self).queryset(request).transform(
+    def get_queryset(self, request):
+        return super(MediaFileAdmin, self).get_queryset(request).transform(
             lookup_translations())
 
     def save_model(self, request, obj, form, change):

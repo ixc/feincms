@@ -6,6 +6,15 @@ http://mail.python.org/pipermail/python-dev/2008-January/076194.html
 
 from __future__ import absolute_import, unicode_literals
 
+from distutils.version import LooseVersion
+from django import get_version
+from django.template.loader import render_to_string
+
+
+__all__ = (
+    'monkeypatch_method', 'monkeypatch_property',
+)
+
 
 def monkeypatch_method(cls):
     """
@@ -37,21 +46,21 @@ def monkeypatch_property(cls):
     return decorator
 
 
-def monkeypatch_class(name, bases, namespace):
-    """
-    A metaclass to add a number of methods (or other attributes) to an
-    existing class, using a convenient class notation::
+if LooseVersion(get_version()) < LooseVersion('1.10'):
+    def ct_render_to_string(template, ctx, **kwargs):
+        from django.template import RequestContext
 
-        class <newclass>(<someclass>):
-            __metaclass__ = monkeypatch_class
-            def <method1>(...): ...
-            def <method2>(...): ...
-            ...
-    """
+        context_instance = kwargs.get('context')
+        if context_instance is None and kwargs.get('request'):
+            context_instance = RequestContext(kwargs['request'])
 
-    assert len(bases) == 1, "Exactly one base class required"
-    base = bases[0]
-    for name, value in namespace.iteritems():
-        if name != "__metaclass__":
-            setattr(base, name, value)
-    return base
+        return render_to_string(
+            template,
+            ctx,
+            context_instance=context_instance)
+else:
+    def ct_render_to_string(template, ctx, **kwargs):
+        return render_to_string(
+            template,
+            ctx,
+            request=kwargs.get('request'))

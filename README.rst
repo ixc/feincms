@@ -2,6 +2,11 @@
 FeinCMS - An extensible Django-based CMS
 ========================================
 
+.. image:: https://travis-ci.org/feincms/feincms.svg?branch=next
+   :target: https://travis-ci.org/feincms/feincms
+.. image:: https://travis-ci.org/feincms/feincms.svg?branch=master
+   :target: https://travis-ci.org/feincms/feincms
+
 When was the last time, that a pre-built software package you wanted to
 use got many things right, but in the end, you still needed to modify
 the core parts of the code just because it wasn't (easily) possible to
@@ -39,27 +44,27 @@ else which I haven't thought of yet). It provides helper functions,
 which provide ordered lists of page content blocks. That's all.
 
 
-Adding your own content types is extremely easy. Do you like textile
+Adding your own content types is extremely easy. Do you like markdown
 that much, that you'd rather die than using a rich text editor?
 Then add the following code to your project, and you can go on using the
 CMS without being forced to use whatever the developers deemed best:
 
-::
+.. code-block:: python
 
+    from markdown2 import markdown
     from feincms.module.page.models import Page
-    from django.contrib.markup.templatetags.markup import textile
     from django.db import models
 
-    class TextilePageContent(models.Model):
+    class MarkdownPageContent(models.Model):
         content = models.TextField()
 
         class Meta:
             abstract = True
 
         def render(self, **kwargs):
-            return textile(self.content)
+            return markdown(self.content)
 
-    Page.create_content_type(TextilePageContent)
+    Page.create_content_type(MarkdownPageContent)
 
 
 That's it. Not even ten code lines for your own page content type.
@@ -73,30 +78,9 @@ Visit these sites
 -----------------
 
 * FeinCMS Website: http://www.feincms.org/
-* Read the documentation: http://feincms-django-cms.readthedocs.org/
+* Read the documentation: https://feincms-django-cms.readthedocs.io/
 * See the Google Groups page at http://groups.google.com/group/django-feincms
 * FeinCMS on github: https://github.com/feincms/feincms/
-
-IRC
----
-
-Visit us on IRC! We are hanging around in ``#feincms`` on freenode. If you
-do not have an IRC client you can use the
-`freenode Web IRC client <http://webchat.freenode.net/>`_.
-
-Quickstart
-----------
-
-You can find a short quickstart guide at QUICKSTART.rst
-
-Optional Packages
------------------
-
-* `pytidylib <http://countergram.com/open-source/pytidylib/>`_ can be
-  installed to perform HTML validation and cleanup using `HTML Tidy
-  <http://tidy.sourceforge.net>`_ while editing content. Install pytidylib and
-  add ``FEINCMS_TIDY_HTML = True`` to your settings.py.
-
 
 Repository branches
 -------------------
@@ -115,12 +99,3 @@ rewinding policies are described below.
 * ``pu`` or feature branches are used for short-lived projects. These
   branches aren't guaranteed to stay around and are not meant to be
   deployed into production environments.
-
-
-Travis CI
-=========
-
-.. image:: https://travis-ci.org/feincms/feincms.png?branch=next
-   :target: https://travis-ci.org/feincms/feincms
-.. image:: https://travis-ci.org/feincms/feincms.png?branch=master
-   :target: https://travis-ci.org/feincms/feincms

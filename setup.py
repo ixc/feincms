@@ -1,16 +1,26 @@
 #!/usr/bin/env python
 
+from io import open
 import os
 from setuptools import setup, find_packages
 
 
 def read(filename):
-    return open(os.path.join(os.path.dirname(__file__), filename)).read()
+    path = os.path.join(os.path.dirname(__file__), filename)
+    with open(path, encoding='utf-8') as handle:
+        return handle.read()
 
+
+version = __import__('feincms').__version__
+devstatus = 'Development Status :: 5 - Production/Stable'
+if '.dev' in version:
+    devstatus = 'Development Status :: 3 - Alpha'
+elif '.pre' in version:
+    devstatus = 'Development Status :: 4 - Beta'
 
 setup(
     name='FeinCMS',
-    version=__import__('feincms').__version__,
+    version=version,
     description='Django-based Page CMS and CMS building toolkit.',
     long_description=read('README.rst'),
     author='Matthias Kestenholz',
@@ -19,29 +29,17 @@ setup(
     license='BSD License',
     platforms=['OS Independent'],
     packages=find_packages(
-        exclude=['tests', 'example'],
+        exclude=['tests']
     ),
-    package_data={
-        '': ['*.html', '*.txt'],
-        'feincms': [
-            'locale/*/*/*.*',
-            'static/feincms/*.*',
-            'static/feincms/*/*.*',
-            'templates/*.*',
-            'templates/*/*.*',
-            'templates/*/*/*.*',
-            'templates/*/*/*/*.*',
-            'templates/*/*/*/*/*.*',
-        ],
-    },
+    include_package_data=True,
     install_requires=[
-        'Django>=1.4.2',
-        'django-mptt>=0.6.0',
+        'Django>=1.7',
+        'django-mptt>=0.7.1',
         'Pillow>=2.0.0',
-        'feedparser>=5.0.0',
+        'pytz>=2014.10',
     ],
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
+        devstatus,
         'Environment :: Web Environment',
         'Framework :: Django',
         'Intended Audience :: Developers',
@@ -49,11 +47,10 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Application Frameworks',
